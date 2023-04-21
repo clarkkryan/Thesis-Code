@@ -8,126 +8,226 @@ library(gplots)
 library(UpSetR)
 library(pheatmap)
 library(limma)
+install.packages("BiocManager")
+install.packages("forcats")
+install.packages("stringr")
+install.packages("ggplot2")
+install.packages("ggrepel")
+install.packages("readr")
+install.packages("tidyr")
+install.packages("survminer")
+BiocManager::install("GEOquery")
+BiocManager::install("limma")
+BiocManager::install("pheatmap")
+BiocManager::install("org.Hs.eg.db")
+
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("GEOquery")
+#####libaries
+
+library(ggplot2)
+
+library(ggrepel)
+
+library(GEOquery)
+
+library(dplyr)
+
+library(pheatmap)
+
+library(car)
 
 
-library(rstudioapi)
-restartSession()
-install.packages("rlang")
+###
 
-library(rlang)
-remove.packages("rlang")
-
-
+library(GEOquery)
 my_id <- "GSE64033"
 gse <- getGEO(my_id)
+gse
 
 length(gse)
-# if length = 1:
+gse
 gse <- gse[[1]]
+gse
+summary(exprs(gse))
 
-dim(pData(gse))
-colnames(pData(gse))
-# [1] "title"                   "geo_accession"           "status"                  "submission_date"         "last_update_date"       
-# [6] "type"                    "channel_count"           "source_name_ch1"         "organism_ch1"            "characteristics_ch1"    
-#[11] "characteristics_ch1.1"   "characteristics_ch1.2"   "characteristics_ch1.3"   "molecule_ch1"            "extract_protocol_ch1"   
-#[16] "label_ch1"               "label_protocol_ch1"      "taxid_ch1"               "hyb_protocol"            "scan_protocol"          
-#[21] "data_processing"         "platform_id"             "contact_name"            "contact_email"           "contact_department"     
-#[26] "contact_institute"       "contact_address"         "contact_city"            "contact_zip/postal_code" "contact_country"        
-#[31] "supplementary_file"      "data_row_count"          "cell line:ch1"           "cell type:ch1"           "treatment (drug):ch1"   
-#[36] "treatment (time):ch1"   
+logtransfer <- log2(exprs(gse)) 
+#this is what performs the log transformation in order to make the data more 
+#mangeable, also log transformation is often used to reduce skewness of a measurement variable, 
+#stabilizes the data variance of high intensities but increases the variance at low intensities.
 
-pData(gse)[ , c(1,2,33,35,36)] 
+View(logtransfer)
+boxplot((logtransfer),outline=FALSE)
 
-exprs(gse) <- log2(exprs(gse))
-
-boxplot(exprs(gse),outline=FALSE)
+library(dplyr)
 
 sampleInfo <- pData(gse)
-sampleInfo <- select(sampleInfo, "title", "geo_accession", "cell line:ch1", "treatment (drug):ch1", "treatment (time):ch1")
-sampleInfo <- rename(sampleInfo, Sample = "title", GEO_accession = "geo_accession", Sample_type = "cell line:ch1", Treatment = "treatment (drug):ch1", Timepoint = "treatment (time):ch1")
+
 View(sampleInfo)
-################################################
-# PCA - all samples
-################################################
 
-## MAKE SURE TO TRANSPOSE THE EXPRESSION MATRIX
-pca <- prcomp(t(exprs(gse)))
+#First PCA plot whereby everything is included. Selecting title, which includes cell line, inhibitor and time
+sampleInfo <- pData(gse)
+sampleInfo <- select(sampleInfo, characteristics_ch1,title)
 
-## Join the PCs to the sample information
+#rename columns to something more fitting
+sampleInfo <- rename(sampleInfo, cells = characteristics_ch1 , group = title)
+#
+
+View(sampleInfo)
+
+
+library(pheatmap)
+
+corMatrix <- cor(logtransfer,use="c")
+
+pheatmap(corMatrix)
+
+
+#Performing the PCA 
+
+library(ggplot2)
+
+library(ggrepel)
+
+pca <- prcomp(t(logtransfer)) #perform a pca analysis on transposed expression levels
+
+l<-logtransfer
+
+#This is the command used to generate the PCA plot based off of cell type X title
 cbind(sampleInfo, pca$x) %>% 
-ggplot(aes(x = PC1, y=PC2, col=Sample_type,label=paste("", Sample))) + geom_point() + geom_text_repel()
-
-## Repeat showing all labels
-cbind(sampleInfo, pca$x) %>% 
-ggplot(aes(x = PC1, y=PC2, col=Sample_type,label=paste("", Sample))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+  ggplot(aes(x = PC1, y=PC2,col=cells,label=paste(" ", group))) + geom_point() + geom_text_repel(max.overlaps = Inf)
 
 
-################################################
-# PCA - CAMA1
-################################################
-
-cam_samples <- c(1:13,15:18)
-
-gse_cam <- gse[,cam_samples]
-exprs(gse_cam) <- exprs(gse)[ ,cam_samples]
-
-sampleInfo_cam <- pData(gse_cam)
-sampleInfo_cam <- select(sampleInfo_cam, "title", "geo_accession", "cell line:ch1", "treatment (drug):ch1", "treatment (time):ch1")
-sampleInfo_cam <- rename(sampleInfo_cam, Sample = "title", GEO_accession = "geo_accession", Sample_type = "cell line:ch1", Treatment = "treatment (drug):ch1", Timepoint = "treatment (time):ch1")
-
-pca_cam <- prcomp(t(exprs(gse_cam)))
-cbind(sampleInfo_cam, pca_cam$x) %>% 
-ggplot(aes(x = PC1, y=PC2, col=Timepoint,label=paste("", Sample))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+###################
+#PCA plots on specific cell lines, help indicate which ones are outliers
+cbind(sampleInfo, pca$x) %>%
+  filter(cells == "cell line: CAMA1") %>%
+  ggplot(aes(x = PC1, y=PC2,col= cells,label=paste(" ", group))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+#OUTLIER IS CAMA1_MK24H_2 = GSM1563153
 
 
-################################################
-# PCA - MCF7
-################################################
-
-mcf_samples <- c(19:35)
-
-gse_mcf <- gse[,mcf_samples]
-exprs(gse_mcf) <- exprs(gse)[ ,mcf_samples]
-
-sampleInfo_mcf <- pData(gse_mcf)
-sampleInfo_mcf <- select(sampleInfo_mcf, "title", "geo_accession", "cell line:ch1", "treatment (drug):ch1", "treatment (time):ch1")
-sampleInfo_mcf <- rename(sampleInfo_mcf, Sample = "title", GEO_accession = "geo_accession", Sample_type = "cell line:ch1", Treatment = "treatment (drug):ch1", Timepoint = "treatment (time):ch1")
-
-#Timepoints mislabelled in mcf
-sampleInfo_mcf$Timepoint[sampleInfo_mcf$Timepoint == '2h'] <- '12h'
-
-sampleInfo_mcf <- sampleInfo_mcf %>% 
-  mutate(Timepoint = ifelse(Sample == "MCF7_BYL_1uM_24h_1", "24h", Timepoint))
-
-sampleInfo_mcf <- sampleInfo_mcf %>% 
-  mutate(Timepoint = ifelse(Sample == "MCF7_BYL_1uM_24h_2", "24h", Timepoint))
-
-sampleInfo_mcf <- sampleInfo_mcf %>% 
-  mutate(Timepoint = ifelse(Sample == "MCF7_BYL_1uM_24h_3", "24h", Timepoint))
-
-pca_mcf <- prcomp(t(exprs(gse_mcf)))
+cbind(sampleInfo, pca$x) %>%
+  filter(cells == "cell line: MCF7") %>%
+  ggplot(aes(x = PC1, y=PC2,col= cells,label=paste(" ", group))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+#OUTLIER IS MCF7_BYL_1UM_48H_3 = GSM1563163
 
 
-cbind(sampleInfo_mcf, pca_mcf$x) %>% 
-ggplot(aes(x = PC1, y=PC2, col=Timepoint,label=paste("", Sample))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+
+cbind(sampleInfo, pca$x) %>%
+  filter(cells == "cell line: T47D") %>%
+  ggplot(aes(x = PC1, y=PC2,col= cells,label=paste(" ", group))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+#outlier is T47D_BYL48H_3 = GSM1563193
+
+cbind(sampleInfo, pca$x) %>%
+  filter(cells == "cell line: Patient derived xenograft") %>%
+  ggplot(aes(x = PC1, y=PC2,col= cells,label=paste(" ", group))) + geom_point() + geom_text_repel(max.overlaps = Inf)
 
 
-################################################
-# PCA - T47D
-################################################
+cbind(sampleInfo, pca$x) %>%
+  filter(cells == "cell line: MCF7 xenograft") %>%
+  ggplot(aes(x = PC1, y=PC2,col= cells,label=paste(" ", group))) + geom_point() + geom_text_repel(max.overlaps = Inf)
 
-t47_samples <- c(37:53)
+#OUTLIER is MCF7_XENO_BYL DAY 7_2 = GSM1563204
+View(sampleInfo)
+View(mcf7_xeno)
+###################
 
-gse_t47 <- gse[,t47_samples]
-exprs(gse_t47) <- exprs(gse)[ ,t47_samples]
 
-sampleInfo_t47 <- pData(gse_t47)
-sampleInfo_t47 <- select(sampleInfo_t47, "title", "geo_accession", "cell line:ch1", "treatment (drug):ch1", "treatment (time):ch1")
-sampleInfo_t47 <- rename(sampleInfo_t47, Sample = "title", GEO_accession = "geo_accession", Sample_type = "cell line:ch1", Treatment = "treatment (drug):ch1", Timepoint = "treatment (time):ch1")
+##################
+#removing outliers and re running pca plots
 
-pca_t47 <- prcomp(t(exprs(gse_t47)))
-cbind(sampleInfo_t47, pca_t47$x) %>% 
-ggplot(aes(x = PC1, y=PC2, col=Timepoint,label=paste("", Sample))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+#CAMA1_MK24H_2 = GSM1563153
+#MCF7_BYL_1UM_48H_3 = GSM1563175
+#T47D_BYL48H_3 = GSM1563193
+#MCF7_XENO_BYL DAY 7_2 = GSM1563204
+
+
+View(sampleInfo)
+
+#####removed contains cell types + inhibitors/time with the outliers removed
+sampleInfoX <- pData(gse)
+sampleInfoX <- select(sampleInfoX, title,characteristics_ch1.2)
+sampleInfoX <- rename(sampleInfoX, cells = title , group = characteristics_ch1.2)
+
+
+
+removed<-sampleInfoX[-c(14,36,54,65),] #removing the outliers
+View(sampleInfoX)
+
+cama<-removed[c(1:17),]
+View(cama)
+
+mcf <- removed[c(18:34),]
+View(mcf)
+
+t47d <- removed[c(35:51),]
+View(t47d)
+
+patient_xeno <- removed[c(52:57),]
+View(patient_xeno)
+
+mcf7_xeno <- removed[c(58:61),]
+View(mcf7_xeno)
+###mislabelled samples had to be renamed
+mcf[c(10:12),2]<- "treatment (time): 12h"
+mcf[c(13:15),2]<- "treatment (time): 24h"
+patient_xeno[c(1:3),2] <- "Control"
+patient_xeno[c(4:6),2] <- "BYL inhibitor"
+mcf7_xeno[c(1:3),2] <- "Control"
+mcf7_xeno[4,2] <- "BYL inhibitor"
+
+######
+b<-l[,-c(14,36,54,65)]
+pca1<-prcomp(t(b))
+
+#### Need these for PCA plots for indivdual cell lines
+c <- b[,c(1:17)] #cama
+d<- b[,c(18:34)] #MCf7  
+e<- b[,c(35:51)] #t47d
+f<- b[,c(52:57)] #patient
+g<- b[,c(58:61)] #mcf7 xeno
+
+View(cama)
+##these PCA plots are run by taking pca values when its ONLY the specific cell lines
+## b has the outliers removed, so working from there, I will select only the specific cell lines in order to run a cell line specific pca plot
+##cama
+
+##adding colour involves changing the col= the label=paste("", GROUP)
+
+pca2<-prcomp(t(c))
+
+cbind(cama, pca2$x) %>% 
+  ggplot(aes(x = PC1, y=PC2,col=group,label=paste(" ", cells))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+##mcf7
+pca3<-prcomp(t(d))
+
+cbind(mcf, pca3$x) %>% 
+  ggplot(aes(x = PC1, y=PC2,col=group,label=paste(" ", cells))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+
+###t47d
+
+pca4<- prcomp(t(e))
+
+cbind(t47d, pca4$x) %>% 
+  ggplot(aes(x = PC1, y=PC2,col=group,label=paste(" ", cells))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+
+####patient xeno
+
+pca5 <- prcomp(t(f))
+
+cbind(patient_xeno, pca5$x) %>% 
+  ggplot(aes(x = PC1, y=PC2,col=group,label=paste(" ", cells))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+
+####mcf7 xeno
+
+pca6<- prcomp(t(g))
+
+cbind(mcf7_xeno, pca6$x) %>% 
+  ggplot(aes(x = PC1, y=PC2,col=group,label=paste(" mcf7 Xeno", cells))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+
+
+
 
 
 
