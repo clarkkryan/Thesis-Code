@@ -1,0 +1,898 @@
+library(GEOquery)
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(tidyr)
+library(gplots)
+library(gplots)
+library(UpSetR)
+library(pheatmap)
+library(limma)
+
+
+library(rstudioapi)
+restartSession()
+install.packages("rlang")
+
+library(rlang)
+remove.packages("rlang")
+
+
+my_id <- "GSE64033"
+gse <- getGEO(my_id)
+
+length(gse)
+# if length = 1:
+gse <- gse[[1]]
+
+dim(pData(gse))
+colnames(pData(gse))
+# [1] "title"                   "geo_accession"           "status"                  "submission_date"         "last_update_date"       
+# [6] "type"                    "channel_count"           "source_name_ch1"         "organism_ch1"            "characteristics_ch1"    
+#[11] "characteristics_ch1.1"   "characteristics_ch1.2"   "characteristics_ch1.3"   "molecule_ch1"            "extract_protocol_ch1"   
+#[16] "label_ch1"               "label_protocol_ch1"      "taxid_ch1"               "hyb_protocol"            "scan_protocol"          
+#[21] "data_processing"         "platform_id"             "contact_name"            "contact_email"           "contact_department"     
+#[26] "contact_institute"       "contact_address"         "contact_city"            "contact_zip/postal_code" "contact_country"        
+#[31] "supplementary_file"      "data_row_count"          "cell line:ch1"           "cell type:ch1"           "treatment (drug):ch1"   
+#[36] "treatment (time):ch1"   
+
+pData(gse)[ , c(1,2,33,35,36)] 
+
+exprs(gse) <- log2(exprs(gse))
+
+boxplot(exprs(gse),outline=FALSE)
+
+sampleInfo <- pData(gse)
+sampleInfo <- select(sampleInfo, "title", "geo_accession", "cell line:ch1", "treatment (drug):ch1", "treatment (time):ch1")
+sampleInfo <- rename(sampleInfo, Sample = "title", GEO_accession = "geo_accession", Sample_type = "cell line:ch1", Treatment = "treatment (drug):ch1", Timepoint = "treatment (time):ch1")
+View(sampleInfo)
+################################################
+# PCA - all samples
+################################################
+
+## MAKE SURE TO TRANSPOSE THE EXPRESSION MATRIX
+pca <- prcomp(t(exprs(gse)))
+
+## Join the PCs to the sample information
+cbind(sampleInfo, pca$x) %>% 
+ggplot(aes(x = PC1, y=PC2, col=Sample_type,label=paste("", Sample))) + geom_point() + geom_text_repel()
+
+## Repeat showing all labels
+cbind(sampleInfo, pca$x) %>% 
+ggplot(aes(x = PC1, y=PC2, col=Sample_type,label=paste("", Sample))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+
+
+################################################
+# PCA - CAMA1
+################################################
+
+cam_samples <- c(1:13,15:18)
+
+gse_cam <- gse[,cam_samples]
+exprs(gse_cam) <- exprs(gse)[ ,cam_samples]
+
+sampleInfo_cam <- pData(gse_cam)
+sampleInfo_cam <- select(sampleInfo_cam, "title", "geo_accession", "cell line:ch1", "treatment (drug):ch1", "treatment (time):ch1")
+sampleInfo_cam <- rename(sampleInfo_cam, Sample = "title", GEO_accession = "geo_accession", Sample_type = "cell line:ch1", Treatment = "treatment (drug):ch1", Timepoint = "treatment (time):ch1")
+
+pca_cam <- prcomp(t(exprs(gse_cam)))
+cbind(sampleInfo_cam, pca_cam$x) %>% 
+ggplot(aes(x = PC1, y=PC2, col=Timepoint,label=paste("", Sample))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+
+
+################################################
+# PCA - MCF7
+################################################
+
+mcf_samples <- c(19:35)
+
+gse_mcf <- gse[,mcf_samples]
+exprs(gse_mcf) <- exprs(gse)[ ,mcf_samples]
+
+sampleInfo_mcf <- pData(gse_mcf)
+sampleInfo_mcf <- select(sampleInfo_mcf, "title", "geo_accession", "cell line:ch1", "treatment (drug):ch1", "treatment (time):ch1")
+sampleInfo_mcf <- rename(sampleInfo_mcf, Sample = "title", GEO_accession = "geo_accession", Sample_type = "cell line:ch1", Treatment = "treatment (drug):ch1", Timepoint = "treatment (time):ch1")
+
+#Timepoints mislabelled in mcf
+sampleInfo_mcf$Timepoint[sampleInfo_mcf$Timepoint == '2h'] <- '12h'
+
+sampleInfo_mcf <- sampleInfo_mcf %>% 
+  mutate(Timepoint = ifelse(Sample == "MCF7_BYL_1uM_24h_1", "24h", Timepoint))
+
+sampleInfo_mcf <- sampleInfo_mcf %>% 
+  mutate(Timepoint = ifelse(Sample == "MCF7_BYL_1uM_24h_2", "24h", Timepoint))
+
+sampleInfo_mcf <- sampleInfo_mcf %>% 
+  mutate(Timepoint = ifelse(Sample == "MCF7_BYL_1uM_24h_3", "24h", Timepoint))
+
+pca_mcf <- prcomp(t(exprs(gse_mcf)))
+
+
+cbind(sampleInfo_mcf, pca_mcf$x) %>% 
+ggplot(aes(x = PC1, y=PC2, col=Timepoint,label=paste("", Sample))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+
+
+################################################
+# PCA - T47D
+################################################
+
+t47_samples <- c(37:53)
+
+gse_t47 <- gse[,t47_samples]
+exprs(gse_t47) <- exprs(gse)[ ,t47_samples]
+
+sampleInfo_t47 <- pData(gse_t47)
+sampleInfo_t47 <- select(sampleInfo_t47, "title", "geo_accession", "cell line:ch1", "treatment (drug):ch1", "treatment (time):ch1")
+sampleInfo_t47 <- rename(sampleInfo_t47, Sample = "title", GEO_accession = "geo_accession", Sample_type = "cell line:ch1", Treatment = "treatment (drug):ch1", Timepoint = "treatment (time):ch1")
+
+pca_t47 <- prcomp(t(exprs(gse_t47)))
+cbind(sampleInfo_t47, pca_t47$x) %>% 
+ggplot(aes(x = PC1, y=PC2, col=Timepoint,label=paste("", Sample))) + geom_point() + geom_text_repel(max.overlaps = Inf)
+
+
+
+################################################
+# limma - time course analysis
+################################################
+
+#https://support.bioconductor.org/p/12119/
+#You will need at least as many contrasts as time points minus one. 
+#So if you have 3 times, you need at least 2 contrasts. It is just like one way anova.
+#The approach outlined in the User's Guide finds genes which change over time without worrying about which particular time the genes differ at.  
+#You will get the same F-test regardless of how you specify the contrasts, as long as the contrasts span all the times.
+
+View(gse)
+BYL719_lines <- c(19:35, 37:53) #mcf7 + t47d cell lines
+
+gse_BYL719_lines <- gse[,BYL719_lines] 
+
+gse_BYL719_lines # this now contains the expression data for only the mcf7 and t47d cell lines
+
+exprs(gse_BYL719_lines) <- exprs(gse)[ ,BYL719_lines] #expression levels for the mcf7 and t47d cell lines have bee renamed into exprs(gse_BYL719_lines)
+
+
+sampleInfo_BYL719_lines <- pData(gse_BYL719_lines) #phenotypic data for the mcf7 and t47d data
+sampleInfo_BYL719_lines <- select(sampleInfo_BYL719_lines, "title", "geo_accession", "cell line:ch1", "treatment (drug):ch1", "treatment (time):ch1")
+sampleInfo_BYL719_lines <- rename(sampleInfo_BYL719_lines, Sample = "title", GEO_accession = "geo_accession", Sample_type = "cell line:ch1", Treatment = "treatment (drug):ch1", Timepoint = "treatment (time):ch1")
+View(sampleInfo_BYL719_lines)
+
+
+sampleInfo_BYL719_lines <- sampleInfo_BYL719_lines %>% unite("Lines_Timepoint", Sample_type, Timepoint, remove = FALSE)
+
+#Time points mislabeled in mcf 
+sampleInfo_BYL719_lines$Lines_Timepoint[sampleInfo_BYL719_lines$Lines_Timepoint == 'MCF7_2h'] <- 'MCF7_12h'
+
+sampleInfo_BYL719_lines <- sampleInfo_BYL719_lines %>% 
+  mutate(Lines_Timepoint = ifelse(Sample == "MCF7_BYL_1uM_24h_1", "MCF7_24h", Lines_Timepoint))
+sampleInfo_BYL719_lines <- sampleInfo_BYL719_lines %>% 
+  mutate(Lines_Timepoint = ifelse(Sample == "MCF7_BYL_1uM_24h_2", "MCF7_24h", Lines_Timepoint))
+sampleInfo_BYL719_lines <- sampleInfo_BYL719_lines %>% 
+  mutate(Lines_Timepoint = ifelse(Sample == "MCF7_BYL_1uM_24h_3", "MCF7_24h", Lines_Timepoint))
+
+View(sampleInfo_BYL719_lines)
+
+
+## calculate median expression level
+cutoff <- median(exprs(gse_BYL719_lines))
+#quantile(exprs(gse_BYL719_lines),0.25,names=F) #25th percentile
+
+## TRUE or FALSE for whether each gene is "expressed" in each sample
+is_expressed <- exprs(gse_BYL719_lines) > cutoff
+
+##is_expressed is dataframe containing the mcf7 and t47d samples whereby if the expression level is higher than the median(cutoff) than that gene is marked as TRUE or if not then FALSE
+
+
+## Identify genes expressed in more than 2 samples
+keep <- rowSums(is_expressed) > 2
+
+## check how many genes are removed / retained.
+table(keep)
+
+## subset to just those expressed genes
+gse_BYL719_lines <- gse_BYL719_lines[keep,] 
+#########################################
+
+
+
+## Contrasts spanning MCF7 timepoints
+lev <- c("MCF7_Control","MCF7_4h","MCF7_8h","MCF7_12h","MCF7_24h","MCF7_48h", "T47D_Control","T47D_4h","T47D_8h","T47D_12h","T47D_24h","T47D_48h")
+
+f <- factor(sampleInfo_BYL719_lines$Lines_Timepoint, levels=lev) #this creates a factor including all the names for MCF7 + T47D and their names
+#there are 3 names per time stamp, in total there are 35 factors in "f".
+View(sampleInfo_BYL719_lines)
+View(f)
+design <- model.matrix(~0+f)
+#create a matrix for each time sample, but there is no 24H_1 or 24H_2 only 24H
+View(design)
+
+colnames(design) <- lev
+#renaming column names 
+
+
+library(limma)
+fit <- lmFit(gse_BYL719_lines, design)
+head(fit$coefficients)
+
+#
+
+cont.MCF7 <- makeContrasts("MCF7_4h-MCF7_Control", "MCF7_8h-MCF7_4h", "MCF7_12h-MCF7_8h", "MCF7_24h-MCF7_12h", "MCF7_48h-MCF7_24h", levels=design)
+fit2 <- contrasts.fit(fit, cont.MCF7)
+fit2 <- eBayes(fit2)
+MCF7_results_nointercept_noref <- topTable(fit2, adjust="BH", n=Inf)
+
+View(MCF7_results_nointercept_noref)
+#####
+#adjust = "BH" --> this 
+#n=Inf  --> this is the chaning the amount of comparrisons
+#####
+
+
+View(MCF7_results_nointercept_noref)
+
+
+## all possible MCF7 contrasts
+#same p-values as above, but different numbers on decideTests, and can pull out all comparisons
+cont.MCF7.allcontrasts <- makeContrasts("MCF7_4h-MCF7_Control", "MCF7_8h-MCF7_Control", "MCF7_12h-MCF7_Control", "MCF7_24h-MCF7_Control", "MCF7_48h-MCF7_Control", "MCF7_8h-MCF7_4h", "MCF7_12h-MCF7_4h", "MCF7_24h-MCF7_4h", "MCF7_48h-MCF7_4h", "MCF7_12h-MCF7_8h", "MCF7_24h-MCF7_8h", "MCF7_48h-MCF7_8h", "MCF7_24h-MCF7_12h", "MCF7_48h-MCF7_12h", "MCF7_48h-MCF7_24h", levels=design)
+
+fit3 <- contrasts.fit(fit, cont.MCF7.allcontrasts)
+
+fit3 <- eBayes(fit3)
+
+MCF7_results_allcontrasts <- topTable(fit3, adjust="BH", n=Inf)
+View(MCF7_results_allcontrasts)
+
+table(decideTests(fit2))
+table(decideTests(fit3))
+
+View(fit3$coefficients)
+
+MCF7.sigresults.4h.Control <- topTable(fit3, coef=1, adjust="BH", n=Inf, p.value=0.05)
+MCF7.sigresults.8h.Control <- topTable(fit3, coef=2, adjust="BH", n=Inf, p.value=0.05)
+MCF7.sigresults.12h.Control <- topTable(fit3, coef=3, adjust="BH", n=Inf, p.value=0.05) 
+MCF7.sigresults.24h.Control <- topTable(fit3, coef=4, adjust="BH", n=Inf, p.value=0.05)
+MCF7.sigresults.48h.Control <- topTable(fit3, coef=5, adjust="BH", n=Inf, p.value=0.05)
+
+###the logFC column in the sigresults.Xh.control indicates the expression change from control to time X, thus having an absolute value makes it more applicable for filtering.
+###We want it to be in absolute form in order to select based off of that value, the logFC value
+###There is no logFC labelled column in fit3, but the values are already there, it is the value in the time X control columns
+
+####producing absolute log fold values
+MCF7.sigresults.4h.Control$abs_logFC <- abs(MCF7.sigresults.4h.Control$logFC)
+MCF7.sigresults.8h.Control$abs_logFC <- abs(MCF7.sigresults.8h.Control$logFC)
+MCF7.sigresults.12h.Control$abs_logFC <- abs(MCF7.sigresults.12h.Control$logFC)
+MCF7.sigresults.24h.Control$abs_logFC <- abs(MCF7.sigresults.24h.Control$logFC)
+MCF7.sigresults.48h.Control$abs_logFC <- abs(MCF7.sigresults.48h.Control$logFC)
+
+#######
+DE_list <- list(MCF7.4h.Control= MCF7.sigresults.4h.Control$ID, MCF7.8h.Control=MCF7.sigresults.8h.Control$ID, MCF7.12h.Control=MCF7.sigresults.12h.Control$ID, MCF7.24h.Control=MCF7.sigresults.24h.Control$ID, MCF7.48h.Control=MCF7.sigresults.48h.Control$ID)
+#DE_list is just the ID names for all the probes in each time sample
+gplots::venn(DE_list)
+
+DE_gns <- UpSetR::fromList(DE_list)
+UpSetR::upset(DE_gns, order.by = "freq")
+#########################################
+
+
+## Contrasts spanning T47D timepoints
+lev2 <- c("T47D_Control","T47D_4h","T47D_8h","T47D_12h","T47D_24h","T47D_48h", "MCF7_Control","MCF7_4h","MCF7_8h","MCF7_12h","MCF7_24h","MCF7_48h")
+f2 <- factor(sampleInfo_BYL719_lines$Lines_Timepoint, levels=lev2)
+
+design3 <- model.matrix(~0+f2)
+colnames(design3) <- lev2
+fit6 <- lmFit(gse_BYL719_lines, design3)
+cont.T47D <- makeContrasts("T47D_4h-T47D_Control", "T47D_8h-T47D_4h", "T47D_12h-T47D_8h", "T47D_24h-T47D_12h", "T47D_48h-T47D_24h", levels=design3)
+fit7 <- contrasts.fit(fit6, cont.T47D)
+fit7 <- eBayes(fit7)
+T47D_results_nointercept_noref <- topTable(fit7, adjust="BH", n=Inf)
+
+View(T47D_results_nointercept_noref)
+
+
+## all possible T47D contrasts
+cont.T47D.allcontrasts <- makeContrasts("T47D_4h-T47D_Control", "T47D_8h-T47D_Control", "T47D_12h-T47D_Control", "T47D_24h-T47D_Control", "T47D_48h-T47D_Control", "T47D_8h-T47D_4h", "T47D_12h-T47D_4h", "T47D_24h-T47D_4h", "T47D_48h-T47D_4h", "T47D_12h-T47D_8h", "T47D_24h-T47D_8h", "T47D_48h-T47D_8h", "T47D_24h-T47D_12h", "T47D_48h-T47D_12h", "T47D_48h-T47D_24h", levels=design3)
+fit8 <- contrasts.fit(fit6, cont.T47D.allcontrasts)
+fit8 <- eBayes(fit8)
+T47D_results_allcontrasts <- topTable(fit8, adjust="BH", n=Inf)
+View(T47D_results_allcontrasts)
+
+View(T47D.sigresults.4h.Control)
+
+
+T47D.sigresults.4h.Control <- topTable(fit8, coef=1, adjust="BH", n=Inf, p.value=0.05)
+T47D.sigresults.8h.Control <- topTable(fit8, coef=2, adjust="BH", n=Inf, p.value=0.05)
+T47D.sigresults.12h.Control <- topTable(fit8, coef=3, adjust="BH", n=Inf, p.value=0.05)
+T47D.sigresults.24h.Control <- topTable(fit8, coef=4, adjust="BH", n=Inf, p.value=0.05)
+T47D.sigresults.48h.Control <- topTable(fit8, coef=5, adjust="BH", n=Inf, p.value=0.05)
+
+####producing an absolute value for the log fold change 
+T47D.sigresults.4h.Control$abs_logFC <- abs(T47D.sigresults.4h.Control$logFC)
+T47D.sigresults.8h.Control$abs_logFC <- abs(T47D.sigresults.8h.Control$logFC)
+T47D.sigresults.12h.Control$abs_logFC <- abs(T47D.sigresults.12h.Control$logFC)
+T47D.sigresults.24h.Control$abs_logFC <- abs(T47D.sigresults.24h.Control$logFC)
+T47D.sigresults.48h.Control$abs_logFC <- abs(T47D.sigresults.48h.Control$logFC)
+#####
+
+DE_list1 <- list(T47D.4h.Control=T47D.sigresults.4h.Control$ID, T47D.8h.Control=T47D.sigresults.8h.Control$ID, T47D.12h.Control=T47D.sigresults.12h.Control$ID, T47D.24h.Control=T47D.sigresults.24h.Control$ID, T47D.48h.Control=T47D.sigresults.48h.Control$ID)
+gplots::venn(DE_list1)
+DE_gns1 <- UpSetR::fromList(DE_list1)
+UpSetR::upset(DE_gns1, order.by = "freq")
+
+
+
+
+######### creation of the anova samples ###########
+MCF7.sigresults.anova <- topTable(fit2, ,adjust="BH",n=Inf,p.value=0.05 )
+T47D.sigresults.anova <- topTable(fit7, adjust="BH", n=Inf,p.value=0.05 )
+
+######           UPSET PLOTS      #########
+
+
+
+##########      Time X control AND anova ############
+DE_list2 <- list(MCF7.anova=MCF7.sigresults.anova$ID, T47D.anova=T47D.sigresults.anova$ID,MCF7.4h.Control=MCF7.sigresults.4h.Control$ID, MCF7.8h.Control=MCF7.sigresults.8h.Control$ID, MCF7.12h.Control=MCF7.sigresults.12h.Control$ID, MCF7.24h.Control=MCF7.sigresults.24h.Control$ID, MCF7.48h.Control=MCF7.sigresults.48h.Control$ID,T47D.4h.Control=T47D.sigresults.4h.Control$ID, T47D.8h.Control=T47D.sigresults.8h.Control$ID, T47D.12h.Control=T47D.sigresults.12h.Control$ID, T47D.24h.Control=T47D.sigresults.24h.Control$ID, T47D.48h.Control=T47D.sigresults.48h.Control$ID)
+DE_gns2 <- UpSetR::fromList(DE_list2)
+UpSetR::upset(DE_gns2, order.by = "freq", nsets=12)
+#nsets increases overlaps
+
+
+###       ONLY contains mcf7 and t47 samples
+DE_list2 <- list(MCF7.4h.Control=MCF7.sigresults.4h.Control$ID, MCF7.8h.Control=MCF7.sigresults.8h.Control$ID, MCF7.12h.Control=MCF7.sigresults.12h.Control$ID, MCF7.24h.Control=MCF7.sigresults.24h.Control$ID, MCF7.48h.Control=MCF7.sigresults.48h.Control$ID,T47D.4h.Control=T47D.sigresults.4h.Control$ID, T47D.8h.Control=T47D.sigresults.8h.Control$ID, T47D.12h.Control=T47D.sigresults.12h.Control$ID, T47D.24h.Control=T47D.sigresults.24h.Control$ID, T47D.48h.Control=T47D.sigresults.48h.Control$ID)
+DE_gns2 <- UpSetR::fromList(DE_list2)
+UpSetR::upset(DE_gns2, order.by = "freq", nsets=12)
+
+
+###      ONLY mcf7 & t47d anova samples
+bob <- list(MCF7.anova=MCF7.sigresults.anova$ID, T47D.anova=T47D.sigresults.anova$ID)
+bob1 <- UpSetR::fromList(bob)
+UpSetR::upset(bob1, order.by = "freq", nsets=12)
+
+
+#############finding overlaps between anova samples
+
+#MCF7.sigresults.anova = fit 2 which is the contrast between each time point one after another 0->4, 4->8, 8->12 etc
+#finds intersects between both samples at any time points, these intersects are significant 
+#produce it for other time points if neccessary
+
+##intersects of anova results
+anova_overlaps <- Reduce(intersect, list(MCF7.anova=MCF7.sigresults.anova$ID, T47D.anova=T47D.sigresults.anova$ID))
+anova_overlaps_mcf7 <- MCF7_results_allcontrasts[anova_overlaps,]
+anova_overlaps_t47d <- T47D_results_allcontrasts[anova_overlaps,]
+nrow(anova_overlaps_mcf7)
+nrow(anova_overlaps_t47d)
+
+###################finding intersects of t47d and mcf7 samples (no anova)
+
+#mcf7 cells --> this intersection tells us the amount of genes common in all samples, its 195 genes
+all_intersect <- Reduce(intersect, list(
+                                        MCF7.4h.Control=MCF7.sigresults.4h.Control$ID, 
+                                        MCF7.8h.Control=MCF7.sigresults.8h.Control$ID, 
+                                        MCF7.12h.Control=MCF7.sigresults.12h.Control$ID, 
+                                        MCF7.24h.Control=MCF7.sigresults.24h.Control$ID, 
+                                        MCF7.48h.Control=MCF7.sigresults.48h.Control$ID,
+                                        
+                                        T47D.4h.Control=T47D.sigresults.4h.Control$ID, 
+                                        T47D.8h.Control=T47D.sigresults.8h.Control$ID, 
+                                        T47D.12h.Control=T47D.sigresults.12h.Control$ID, 
+                                        T47D.24h.Control=T47D.sigresults.24h.Control$ID, 
+                                        T47D.48h.Control=T47D.sigresults.48h.Control$ID))
+mcf7_intersect_results <- MCF7_results_allcontrasts[all_intersect,]
+t47d_intersect_results <- T47D_results_allcontrasts[all_intersect,]
+
+mcf7_intersect_results1 <- mcf7_intersect_results[c(1,6,31:45)]
+View(mcf7_intersect_results)
+View(t47d_intersect_results)
+
+nrow(mcf7_intersect_results)
+nrow(t47d_intersect_results)
+
+############
+nrow(anova_overlaps_t47d) #3285 genes overlap
+nrow(anova_overlaps_mcf7)
+
+nrow(mcf7_intersect_results) #195 genes overlap
+nrow(t47d_intersect_results)
+
+
+
+
+
+
+############ lOG foLD CHANGE ################
+
+
+#######   applying log fold change threshold value   #############
+##need to apply the lfc value to my time against control samples 
+
+T47D.sigresults.4h.Control.log <- topTable(fit8,  lfc= 0.58, coef=1, adjust="BH", n=Inf, p.value=0.05)
+T47D.sigresults.8h.Control.log <- topTable(fit8,  lfc= 0.58, coef=2, adjust="BH", n=Inf, p.value=0.05)
+T47D.sigresults.12h.Control.log <- topTable(fit8, lfc= 0.58,coef=3, adjust="BH", n=Inf, p.value=0.05)
+T47D.sigresults.24h.Control.log <- topTable(fit8, lfc= 0.58,coef=4, adjust="BH", n=Inf, p.value=0.05)
+T47D.sigresults.48h.Control.log <- topTable(fit8, lfc= 0.58, coef=5, adjust="BH", n=Inf, p.value=0.05)
+
+MCF7.sigresults.4h.Control.log <- topTable(fit3,  lfc= 0.58, coef=1, adjust="BH", n=Inf, p.value=0.05)
+MCF7.sigresults.8h.Control.log <- topTable(fit3,  lfc= 0.58, coef=2, adjust="BH", n=Inf, p.value=0.05)
+MCF7.sigresults.12h.Control.log <- topTable(fit3, lfc= 0.58,coef=3, adjust="BH", n=Inf, p.value=0.05)
+MCF7.sigresults.24h.Control.log <- topTable(fit3, lfc= 0.58,coef=4, adjust="BH", n=Inf, p.value=0.05)
+MCF7.sigresults.48h.Control.log <- topTable(fit3, lfc= 0.58, coef=5, adjust="BH", n=Inf, p.value=0.05)
+
+nrow(MCF7.sigresults.4h.Control.log) + nrow(MCF7.sigresults.8h.Control.log) +nrow(MCF7.sigresults.12h.Control.log) + nrow(MCF7.sigresults.12h.Control.log) + nrow(MCF7.sigresults.24h.Control.log)+nrow(MCF7.sigresults.48h.Control.log)
+
+
+nrow(T47D.sigresults.4h.Control.log) + nrow(T47D.sigresults.8h.Control.log) +nrow(T47D.sigresults.12h.Control.log) + nrow(T47D.sigresults.12h.Control.log) + nrow(T47D.sigresults.24h.Control.log)+nrow(T47D.sigresults.48h.Control.log)
+
+
+####producing an absolute value for the log fold change 
+T47D.sigresults.4h.Control.log$abs_logFC <- abs(T47D.sigresults.4h.Control.log$logFC)
+T47D.sigresults.8h.Control.log$abs_logFC <- abs(T47D.sigresults.8h.Control.log$logFC)
+T47D.sigresults.12h.Control.log$abs_logFC <- abs(T47D.sigresults.12h.Control.log$logFC)
+T47D.sigresults.24h.Control.log$abs_logFC <- abs(T47D.sigresults.24h.Control.log$logFC)
+T47D.sigresults.48h.Control.log$abs_logFC <- abs(T47D.sigresults.48h.Control.log$logFC)
+
+
+MCF7.sigresults.4h.Control.log$abs_logFC <- abs(MCF7.sigresults.4h.Control.log$logFC)
+MCF7.sigresults.8h.Control.log$abs_logFC <- abs(MCF7.sigresults.8h.Control.log$logFC)
+MCF7.sigresults.12h.Control.log$abs_logFC <- abs(MCF7.sigresults.12h.Control.log$logFC)
+MCF7.sigresults.24h.Control.log$abs_logFC <- abs(MCF7.sigresults.24h.Control.log$logFC)
+MCF7.sigresults.48h.Control.log$abs_logFC <- abs(MCF7.sigresults.48h.Control.log$logFC)
+
+
+
+
+
+#############   ANOVA samples now #########
+MCF7.sigresults.anova.log <- topTable(fit2,  adjust="BH",n=Inf,p.value=0.05 )
+T47D.sigresults.anova.log <- topTable(fit7,  adjust="BH", n=Inf,p.value=0.05 )
+
+anova.log_overlaps <- Reduce(intersect, list(MCF7.anova=MCF7.sigresults.anova.log$ID, T47D.anova=T47D.sigresults.anova.log$ID))
+anova.log_overlaps_mcf7 <- MCF7_results_allcontrasts[anova.log_overlaps,]
+anova.log_overlaps_t47d <- T47D_results_allcontrasts[anova.log_overlaps,]
+
+subset_df_mcf7 <- anova.log_overlaps_mcf7[anova.log_overlaps_mcf7$MCF7_48h.MCF7_Control > 0.58 | anova.log_overlaps_mcf7$MCF7_48h.MCF7_Control < -0.58, ]
+subset_df_t47d <- anova.log_overlaps_t47d[anova.log_overlaps_t47d$T47D_48h.T47D_Control > 0.58 | anova.log_overlaps_t47d$T47D_48h.T47D_Control < -0.58, ]
+
+nrow(subset_df_t47d)
+nrow(subset_df_mcf7)
+
+Overlap <- Reduce(intersect, list(subset_df_mcf7$ID, subset_df_t47d$ID)) #overlap between contrasts between time intervals
+
+
+Overlap_mcf7 <- MCF7_results_allcontrasts[Overlap,]
+Overlap_t47d <- T47D_results_allcontrasts[Overlap,]
+
+nrow(Overlap_mcf7)
+
+
+#determining 
+Overlap_mcf7_subset <- Overlap_mcf7[Overlap_mcf7[, 35] > 0, ]
+Overlap_t47d_subset <- Overlap_t47d[Overlap_t47d[, 35] > 0, ]
+
+t47d_only <- setdiff(Overlap_t47d_subset$ILMN_Gene, Overlap_mcf7_subset$ILMN_Gene)
+
+mcf7_only <- setdiff(Overlap_mcf7_subset$ILMN_Gene, Overlap_t47d_subset$ILMN_Gene)
+
+
+
+################### UPSET PLOTS for all samples when log transformed ###########
+
+
+########## upset plot ONLY mcf and t47d post LT #########
+no_anova_log <-  list(
+             MCF7.4h.Control.log=MCF7.sigresults.4h.Control.log$ID, 
+             MCF7.8h.Control.log=MCF7.sigresults.8h.Control.log$ID, 
+             MCF7.12h.Control.log=MCF7.sigresults.12h.Control.log$ID,
+             MCF7.24h.Control.log=MCF7.sigresults.24h.Control.log$ID, 
+             MCF7.48h.Control.log=MCF7.sigresults.48h.Control.log$ID,
+             T47D.4h.Control.log=T47D.sigresults.4h.Control.log$ID, 
+             T47D.8h.Control.log=T47D.sigresults.8h.Control.log$ID, 
+             T47D.12h.Control.log=T47D.sigresults.12h.Control.log$ID, 
+             T47D.24h.Control.log=T47D.sigresults.24h.Control.log$ID, 
+             T47D.48h.Control.log=T47D.sigresults.48h.Control.log$ID)
+
+no_anova_log <- UpSetR::fromList(no_anova_log)
+UpSetR::upset(no_anova_log, order.by = "freq", nsets=12)
+
+########## upset plot WITH ANOVA post LT ###################
+with_anova_log <-  list(MCF7.anova.log=subset_df_mcf7$ID, 
+                        T47D.anova.log=subset_df_t47d$ID,
+                        MCF7.4h.Control.log=MCF7.sigresults.4h.Control.log$ID, 
+                        MCF7.8h.Control.log=MCF7.sigresults.8h.Control.log$ID, 
+                        MCF7.12h.Control.log=MCF7.sigresults.12h.Control.log$ID,
+                        MCF7.24h.Control.log=MCF7.sigresults.24h.Control.log$ID, 
+                        MCF7.48h.Control.log=MCF7.sigresults.48h.Control.log$ID,
+                        
+                        T47D.4h.Control.log=T47D.sigresults.4h.Control.log$ID, 
+                        T47D.8h.Control.log=T47D.sigresults.8h.Control.log$ID, 
+                        T47D.12h.Control.log=T47D.sigresults.12h.Control.log$ID, 
+                        T47D.24h.Control.log=T47D.sigresults.24h.Control.log$ID, 
+                        T47D.48h.Control.log=T47D.sigresults.48h.Control.log$ID)
+with_anova_log <- UpSetR::fromList(with_anova_log)
+UpSetR::upset(with_anova_log, order.by = "freq", nsets=12)
+#10 genes overlap after LT
+
+#####################
+###      ONLY mcf7 & t47d anova samples
+upset_anova.log <- list(MCF7.anova.log=subset_df_mcf7$ID, T47D.anova.log=subset_df_t47d$ID)
+upset_anova.log <- UpSetR::fromList(upset_anova.log)
+UpSetR::upset(upset_anova.log, order.by = "freq", nsets=12)
+
+
+
+
+
+
+########## list of genes everything #######
+
+anova_and.mcf.t47d_intersects<-Reduce(intersect, list(MCF7.anova.log=subset_df_mcf7$ID, 
+                                                      T47D.anova.log=subset_df_t47d$ID,
+                                                      MCF7.4h.Control.log=MCF7.sigresults.4h.Control.log$ID, 
+                                                      MCF7.8h.Control.log=MCF7.sigresults.8h.Control.log$ID,
+                                                      MCF7.12h.Control.log=MCF7.sigresults.12h.Control.log$ID,
+                                                      MCF7.24h.Control.log=MCF7.sigresults.24h.Control.log$ID,
+                                                      MCF7.48h.Control.log=MCF7.sigresults.48h.Control.log$ID,
+                                                      
+                                                      T47D.4h.Control.log=T47D.sigresults.4h.Control.log$ID,
+                                                      T47D.8h.Control.log=T47D.sigresults.8h.Control.log$ID,
+                                                      T47D.12h.Control.log=T47D.sigresults.12h.Control.log$ID, 
+                                                      T47D.24h.Control.log=T47D.sigresults.24h.Control.log$ID, 
+                                                      T47D.48h.Control.log=T47D.sigresults.48h.Control.log$ID))
+
+
+
+anova_and.mcf.t47d_intersects
+
+#these 10 genes are identical to when the intersect of ONLY mcf7 and t47d is extrapolated 
+
+
+######### Venn diagrams for MCF7 and t47d AFTER LT ###############
+par(mar=c(3,3,3,3))
+
+mcf_log <- list(MCF7.4h.log= MCF7.sigresults.4h.Control.log$ID, 
+                MCF7.8h.log=MCF7.sigresults.8h.Control.log$ID, 
+                MCF7.12h.log=MCF7.sigresults.12h.Control.log$ID, 
+                MCF7.24h.log=MCF7.sigresults.24h.Control.log$ID, 
+                MCF7.48h.log=MCF7.sigresults.48h.Control.log$ID)
+gplots::venn(mcf_log)
+
+
+
+#19 genes overlap between all samples
+t47_log <-list(T47D.4h.log=T47D.sigresults.4h.Control.log$ID, 
+               T47D.8h.log=T47D.sigresults.8h.Control.log$ID, 
+               T47D.12h.log=T47D.sigresults.12h.Control.log$ID, 
+               T47D.24h.log=T47D.sigresults.24h.Control.log$ID, 
+               T47D.48h.log=T47D.sigresults.48h.Control.log$ID)
+
+#in total 4108
+sum(length(t47_log$T47D.4h.log), length(t47_log$T47D.8h.log), length(t47_log$T47D.12h.log), length(t47_log$T47D.24h.log), length(t47_log$T47D.48h.log))
+
+gplots::venn(t47_log)
+#98 genes overlap between all samples
+
+
+
+#############   Reinspecting intersects with less probes due to log fold change filter  #############
+t47d_intersect_log <- Reduce(intersect, list(T47D.4h.Control=T47D.sigresults.4h.Control.log$ID, T47D.8h.Control=T47D.sigresults.8h.Control.log$ID, T47D.12h.Control=T47D.sigresults.12h.Control.log$ID, T47D.24h.Control=T47D.sigresults.24h.Control.log$ID, T47D.48h.Control=T47D.sigresults.48h.Control.log$ID))
+mcf7_intersect_log <- Reduce(intersect, list(MCF7.4h.Control=MCF7.sigresults.4h.Control.log$ID, MCF7.8h.Control=MCF7.sigresults.8h.Control.log$ID, MCF7.12h.Control=MCF7.sigresults.12h.Control.log$ID, MCF7.24h.Control=MCF7.sigresults.24h.Control.log$ID, MCF7.48h.Control=MCF7.sigresults.48h.Control.log$ID))
+#98 genes in t47d
+#19 genes in mcf7
+#alligns with data from venn diagrams 
+
+only_mcf <- MCF7_results_allcontrasts[mcf7_intersect_log,]
+only_t47d <- T47D_results_allcontrasts[t47d_intersect_log,]
+
+View(only_mcf[,c(6,35)])
+View(only_t47d[,c(6,35)])
+
+all_intersect_log <- Reduce(intersect, list(T47D.4h.Control=T47D.sigresults.4h.Control.log$ID, 
+                                            T47D.8h.Control=T47D.sigresults.8h.Control.log$ID, 
+                                            T47D.12h.Control=T47D.sigresults.12h.Control.log$ID, 
+                                            T47D.24h.Control=T47D.sigresults.24h.Control.log$ID, 
+                                            T47D.48h.Control=T47D.sigresults.48h.Control.log$ID, 
+                                            
+                                            MCF7.4h.Control=MCF7.sigresults.4h.Control.log$ID, 
+                                            MCF7.8h.Control=MCF7.sigresults.8h.Control.log$ID,
+                                            MCF7.12h.Control=MCF7.sigresults.12h.Control.log$ID, 
+                                            MCF7.24h.Control=MCF7.sigresults.24h.Control.log$ID, 
+                                            MCF7.48h.Control=MCF7.sigresults.48h.Control.log$ID))
+
+mcf7_intersect_results_log <- MCF7_results_allcontrasts[all_intersect_log,]
+t47d_intersect_results_log <- T47D_results_allcontrasts[all_intersect_log,]
+
+
+
+nrow(t47d_intersect_results_log)
+nrow(mcf7_intersect_results_log)
+#10 overlapping genes
+#names of the ten genes KLHL24 YPEL3 TP53INP1 C5ORF41 PHLDA2 PIK3IP1 IRS2 HS.579631 TXNIP YPEL2 
+#will produce same gene names but have different expression values
+
+mcf7_intersect_results_log$ILMN_Gene
+t47d_intersect_results_log$ILMN_Gene
+View(mcf7_intersect_results_log)
+
+genes_mcf7_t47d_intersect <- mcf7_intersect_results_log$ILMN_Gene
+
+
+View(anova.log_overlaps_t47d[,c(6,35)]) #use this to check expression levels of the genes, contains the 48h X control
+View(anova.log_overlaps_mcf7[,c(6,35)])
+
+
+### getting gene names
+
+anova.log_overlaps_mcf7$ILMN_Gene
+anova.log_overlaps_t47d$ILMN_Gene
+
+genes_MCF7 <- anova.log_overlaps_mcf7$ILMN_Gene
+genes_T47D <- anova.log_overlaps_t47d$ILMN_Gene
+
+
+#########     extracting gene IDs into file for GEA using DAVID #############
+
+
+write.table(genes_mcf7_t47d_intersect, file = "genes_mcf7_t47d_intersect.txt", quote = FALSE, row.names = FALSE)
+#this is the mcf7 and t47 intersect without anova
+
+write.table(genes_MCF7, file = "genes.txt", quote = FALSE, row.names = FALSE)
+#genes is the anova sample
+
+genes_2 <- Overlap_mcf7$Entrez_Gene_ID
+genes_3 <-Overlap_t47d$ILMN_Gene
+write.table(genes_2, file = "genes2.txt", quote = FALSE, row.names = FALSE)
+write.table(genes_3, file = "genes3.txt", quote = FALSE, row.names = FALSE)
+
+
+
+bp <- read.table("bp.txt", header=TRUE, sep="\t")
+pathways <- read.table("Pathways.txt", header=TRUE, sep="\t")
+bp5 <- read.table("bp_more.direct.txt", header=TRUE, sep="\t")
+
+disease <- read.table("disease.txt", header=TRUE, sep="\t")
+
+cancer <- as.character(disease$Genes[1])
+gene_list <- strsplit(cancer, ', ')[[1]]
+gene_list #list of genes associated with cell division
+
+
+t47d.genes.of.interest.cancer <- T47D_results_allcontrasts[T47D_results_allcontrasts$Entrez_Gene_ID  %in% gene_list,]
+mcf7.genes.of.interest.cancer <- MCF7_results_allcontrasts[MCF7_results_allcontrasts$Entrez_Gene_ID  %in% gene_list,]
+
+
+View(mcf7.genes.of.interest.cancer[,c(6,35)]) #shows only gene name and logFC valaues
+View(t47d.genes.of.interest.cancer[,c(6,35)]) 
+
+
+
+
+
+
+
+
+
+########### SUBSETTING only positive or negative values
+
+positive_mcf <- subset(anova.log_overlaps_mcf7, MCF7_48h.MCF7_Control > 0)  # subset for positive values
+negative_mcf <- subset(anova.log_overlaps_mcf7, MCF7_48h.MCF7_Control < 0)  # subset for negative  values
+View(negative_mcf)
+View(positive_mcf)
+
+
+negative_t47d <- subset(anova.log_overlaps_t47d, T47D_48h.T47D_Control < 0)  # subset for positive values
+positive_t47d <- subset(anova.log_overlaps_t47d, T47D_48h.T47D_Control > 0)  # subset for positive values
+View(negative_t47d)
+View(positive_t47d)
+
+
+negative_t47d<-negative_t47d$ILMN_Gene
+positive_t47d <-positive_t47d$ILMN_Gene
+
+negative_mcf <-negative_mcf$ILMN_Gene
+positive_mcf <-positive_mcf$ILMN_Gene
+
+
+#########     extracting gene IDs into file for GEA using DAVID #############
+
+
+write.table(negative_mcf, file = "negative_mcf.txt", quote = FALSE, row.names = FALSE)
+write.table(positive_mcf, file = "positive_mcf.txt", quote = FALSE, row.names = FALSE)
+write.table(negative_t47d, file = "negative_t47d.txt", quote = FALSE, row.names = FALSE)
+write.table(positive_t47d, file = "positive_t47d.txt", quote = FALSE, row.names = FALSE)
+
+
+
+
+
+
+####### volcano plots #####
+
+
+volcano_plot <- ggplot(data = T47D.sigresults.48h.Control, aes(x = logFC, y = -log10(adj.P.Val))) +
+  geom_point(aes(color = ifelse(logFC > 0.58 & adj.P.Val < 0.05, "red", "blue"), alpha = ifelse(logFC > 0.58 & adj.P.Val < 0.05, 1, 0.5))) +
+  scale_color_identity() +
+  theme_bw() +
+  labs(x = "log2 Fold Change", y = "-log10 p-value", color = "Significant Genes")
+
+volcano_plot
+
+volcano_plot_with_labels <- volcano_plot +
+  geom_text(data = subset(T47D.sigresults.48h.Control, logFC > 1 & adj.P.Val < 0.05), aes(label = ILMN_Gene), size = 3)
+volcano_plot_with_labels
+
+View(T47D.sigresults.48h.Control)
+nrow(T47D.sigresults.48h.Control.log)
+
+
+
+
+
+
+############### DAVID Results #############
+
+
+GEA_disease <- read.table("DAVID_disease.txt", header=TRUE, sep="\t")
+View(GEA_disease)
+#diseases associated with genes uploaded from the ANOVA samples
+
+
+
+GEA_bp <- read.table("DAVID_bp.txt", header=TRUE, sep="\t")
+View(GEA_bp)
+new_list<-GEA_bp[1,6]
+
+
+#################   finding expression levels of genes associated with cell division ###########
+
+###getting the genes into a list
+cell_division <- unlist(strsplit(as.character(GEA_bp$Genes), ", ")) 
+genes_row1 <- as.character(GEA_bp$Genes[1])
+gene_list <- strsplit(genes_row1, ', ')[[1]]
+gene_list #list of genes associated with cell division
+t47d.genes.of.interest.cell_division <- T47D_results_allcontrasts[T47D_results_allcontrasts$ILMN_Gene  %in% gene_list,]
+mcf7.genes.of.interest.cell_division <- MCF7_results_allcontrasts[MCF7_results_allcontrasts$ILMN_Gene  %in% gene_list,]
+
+View(mcf7.genes.of.interest.cell_division[,c(6,35)]) #shows only gene name and logFC valaues
+View(t47d.genes.of.interest.cell_division[,c(6,35)]) 
+
+## CCNG2 is the most up regulated gene after inhibitor treatment after 48 hours in both cell lines - cyclin G2 is linked to growth inhibition and tumour suppression
+
+
+
+###########     mitotic spindle organization ##########
+genes_row.mitotic <- as.character(GEA_bp$Genes[2])
+gene_list.mitotic <- strsplit(genes_row.mitotic, ', ')[[1]]
+gene_list.mitotic
+t47d.genes.of.interest.mitotic <- T47D_results_allcontrasts[T47D_results_allcontrasts$ILMN_Gene] %in% gene_list.mitotic,]
+mcf7.genes.of.interest.mitotic <- MCF7_results_allcontrasts[MCF7_results_allcontrasts$ILMN_Gene  %in% gene_list.mitotic,]
+
+View(mcf7.genes.of.interest.mitotic[,c(6,35)]) #shows only gene name and logFC valaues
+View(t47d.genes.of.interest.mitotic[,c(6,35)]) 
+
+
+
+################ cell cycle
+
+genes_row.cell_cycle<- as.character(GEA_bp$Genes[8])
+gene_list.cell_cycle <- strsplit(genes_row.cell_cycle, ', ')[[1]]
+gene_list.cell_cycle
+
+t47d.genes.of.interest.cell_cycle <- T47D_results_allcontrasts[T47D_results_allcontrasts$ILMN_Gene  %in% gene_list.cell_cycle,]
+mcf7.genes.of.interest.cell_cycle <- MCF7_results_allcontrasts[MCF7_results_allcontrasts$ILMN_Gene  %in% gene_list.cell_cycle,]
+
+View(mcf7.genes.of.interest.cell_cycle[,c(6,35)])
+View(t47d.genes.of.interest.cell_cycle[,c(6,35)])
+
+
+#################### chromosome segregation
+
+genes_row.chrom_seg<- as.character(GEA_bp$Genes[3])
+gene_list.chrom_seg <- strsplit(genes_row.chrom_seg, ', ')[[1]]
+gene_list.chrom_seg
+
+t47d.genes.of.interest.chrom_seg <- T47D_results_allcontrasts[T47D_results_allcontrasts$ILMN_Gene  %in% gene_list.chrom_seg,]
+mcf7.genes.of.interest.chrom_seg <- MCF7_results_allcontrasts[MCF7_results_allcontrasts$ILMN_Gene  %in% gene_list.chrom_seg,]
+
+View(mcf7.genes.of.interest.chrom_seg[,c(6,35)])
+View(t47d.genes.of.interest.chrom_seg[,c(6,35)])
+
+############## mitotic cytokinesis
+mitotic_cytokinesis <- unlist(strsplit(as.character(GEA_bp$Genes), ", ")) 
+mitotic_cytokinesis_genes <- as.character(GEA_bp$Genes[7])
+mitotic_cytokinesis_genes_list <- strsplit(mitotic_cytokinesis_genes, ', ')[[1]]
+mitotic_cytokinesis_genes_list #list of genes associated with cell division
+t47d.genes.of.interest.mitotic_cytokinesis <- T47D_results_allcontrasts[T47D_results_allcontrasts$ILMN_Gene  %in% mitotic_cytokinesis_genes_list,]
+mcf7.genes.of.interest.mitotic_cytokinesis <- MCF7_results_allcontrasts[MCF7_results_allcontrasts$ILMN_Gene  %in% mitotic_cytokinesis_genes_list,]
+
+View(mcf7.genes.of.interest.mitotic_cytokinesis[,c(6,35)]) #shows only gene name and logFC valaues
+View(t47d.genes.of.interest.mitotic_cytokinesis[,c(6,35)])
+
+
+############## mitotic cell cycle
+mitotic_cell.cycle <- unlist(strsplit(as.character(GEA_bp$Genes), ", ")) 
+mitotic_cell.cyle_genes <- as.character(GEA_bp$Genes[5])
+mitotic_cell.cyle_genes_list <- strsplit(mitotic_cell.cyle_genes, ', ')[[1]]
+mitotic_cell.cyle_genes_list #list of genes associated with cell division
+t47d.genes.of.interest.mitotic_cell.cyle <- T47D_results_allcontrasts[T47D_results_allcontrasts$ILMN_Gene  %in% mitotic_cell.cyle_genes_list,]
+mcf7.genes.of.interest.mitotic_cell.cyle <- MCF7_results_allcontrasts[MCF7_results_allcontrasts$ILMN_Gene  %in% mitotic_cell.cyle_genes_list,]
+
+View(mcf7.genes.of.interest.mitotic_cell.cyle[,c(6,35)]) #shows only gene name and logFC valaues
+View(t47d.genes.of.interest.mitotic_cell.cyle[,c(6,35)])
+
+
+
+
+###subsetting the genes from the cell division column for further uploading to DAVID
+write.table(new_list, file = "new_list.txt", quote = FALSE, row.names = FALSE)
+
+cancer_genes <- read.table("CANCER_GENES.txt", header=TRUE, sep="\t") #genes associated cancer from DAVID
+View(cancer_genes)
+
+pathways <- read.table("DAVID_pathway.txt", header=TRUE, sep="\t") #PATHWAYS associated cancer from DAVID
+View(pathways) #generated from anova IDs
+
+#################### PATHWAYS #############
+
+
+# cell cycle
+
+pathways_cell.cycle<- as.character(pathways$Genes[1])
+gene_list.pathways_cell.cycle <- strsplit(pathways_cell.cycle, ', ')[[1]]
+gene_list.pathways_cell.cycle
+
+t47d.genes.of.interest.pathway_cycle<- T47D_results_allcontrasts[T47D_results_allcontrasts$ILMN_Gene  %in% gene_list.pathways_cell.cycle,]
+mcf7.genes.of.interest.pathway_cycle <- MCF7_results_allcontrasts[MCF7_results_allcontrasts$ILMN_Gene  %in% gene_list.pathways_cell.cycle,]
+
+View(mcf7.genes.of.interest.pathway_cycle[,c(6,35)])
+View(t47d.genes.of.interest.pathway_cycle[,c(6,35)])
+
+
+############# FOXO signalling 
+
+foxo<- as.character(pathways$Genes[2])
+gene_list.foxo <- strsplit(foxo, ', ')[[1]]
+gene_list.foxo
+
+t47d.genes.of.interest.foxo<- T47D_results_allcontrasts[T47D_results_allcontrasts$ILMN_Gene  %in% gene_list.foxo,]
+mcf7.genes.of.interest.foxo <- MCF7_results_allcontrasts[MCF7_results_allcontrasts$ILMN_Gene  %in% gene_list.foxo,]
+
+View(mcf7.genes.of.interest.foxo[,c(6,35)])
+View(t47d.genes.of.interest.foxo[,c(6,35)])
+
+
+View(MCF7_results_allcontrasts)
+View(T47D_results_allcontrasts)
+
+
+data <- data.frame(
+  Category = c("GAD_DISEASE_CLASS", "GAD_DISEASE_CLASS"),
+  Term = c("CANCER", "RENAL"),
+  Count = c(33, 15),
+  Percentage = c(38.82352941176471, 17.647058823529413),
+  PValue = c(2.7265049337126673E-6, 0.005274577025031358),
+  Genes = c("TOP2A, GPSM2, IRS2, TTK, TYMS, AURKB, AURKA, CDC20, FBXL20, CCNB2, LGALS1, MAT2A, TNFSF10, E2F2, BUB1, PLK4, FANCI, CDT1, METTL1, KIF23, NDC80, CCNA2, CENPE, BCL6, ESPL1, CCNG2, TIMELESS, TACC3, BIRC5, KIF2C, YPEL3, MCM2, YPEL2", 
+            "PLK4, CDCA2, IRS2, FOXM1, TYMS, NDC80, CCNA2, CDC20, BCL6, PBK, TNFSF10, TACC3, BIRC5, E2F2, DLGAP5"),
+  ListTotal = c(62, 62),
+  PopHits = c(3192, 1415),
+  PopTotal = c(12942, 12942),
+  FoldEnrichment = c(2.158046325491147, 2.2128120369314943),
+  Bonferroni = c(4.634957288618402E-5, 0.08598210063281975),
+  Benjamini = c(4.6350583873115345E-5, 0.04483390471276654),
+  FDR = c(4.6350583873115345E-5, 0.04483390471276654)
+)
+View(data)
+
+
+
+
+
+
+
+
+########### heat maps ##########
+
+corMatrix <- cor(logtransfer,use="c")
+logtransfer[,c(1:3)]
+
+pheatmap(exprs(gse_mcf))
+
+
+
+
